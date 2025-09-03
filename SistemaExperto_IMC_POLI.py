@@ -1,92 +1,139 @@
 import tkinter as tk
 from clips import Environment
 
-# Crear entorno CLIPS
 env = Environment()
 
-# Definir template y reglas
-env.build("(deftemplate persona (slot imc))")
+env.build("(deftemplate persona (slot imc) (slot genero))")
 
 env.build("""
-(defrule bajo-peso
-  (persona (imc ?v))
+(defrule clasificacion-bajo-peso
+  (persona (imc ?v) (genero ?g))
   (test (< ?v 18.5))
   =>
   (assert (clasificacion bajo-peso)))
 """)
 env.build("""
-(defrule peso-normal
-  (persona (imc ?v))
+(defrule clasificacion-peso-normal
+  (persona (imc ?v) (genero ?g))
   (test (and (>= ?v 18.5) (< ?v 25)))
   =>
   (assert (clasificacion peso-normal)))
 """)
 env.build("""
-(defrule sobrepeso
-  (persona (imc ?v))
+(defrule clasificacion-sobrepeso
+  (persona (imc ?v) (genero ?g))
   (test (and (>= ?v 25) (< ?v 30)))
   =>
   (assert (clasificacion sobrepeso)))
 """)
 env.build("""
-(defrule obesidad
-  (persona (imc ?v))
+(defrule clasificacion-obesidad
+  (persona (imc ?v) (genero ?g))
   (test (>= ?v 30))
   =>
   (assert (clasificacion obesidad)))
 """)
 
-# Lógica para cálculo del IMC
-def calcular_imc():
+env.build("""
+(defrule recomendacion-bajo-peso
+  (persona (imc ?v) (genero ?g))
+  (test (< ?v 18.5))
+  =>
+  (assert (recomendacion "Se recomienda aumentar la ingesta calórica con alimentos ricos en nutrientes y realizar ejercicios de fuerza.")))
+""")
+env.build("""
+(defrule recomendacion-peso-normal
+  (persona (imc ?v) (genero ?g))
+  (test (and (>= ?v 18.5) (< ?v 25)))
+  =>
+  (assert (recomendacion "Mantén tu estilo de vida saludable con alimentación equilibrada y actividad física regular.")))
+""")
+env.build("""
+(defrule recomendacion-sobrepeso
+  (persona (imc ?v) (genero ?g))
+  (test (and (>= ?v 25) (< ?v 30)))
+  =>
+  (assert (recomendacion "Reduce la ingesta de azúcares y grasas. Incrementa la actividad física cardiovascular.")))
+""")
+env.build("""
+(defrule recomendacion-obesidad
+  (persona (imc ?v) (genero ?g))
+  (test (>= ?v 30))
+  =>
+  (assert (recomendacion "Consulta con un especialista. Adopta un plan estructurado de alimentación y ejercicio.")))
+""")
+
+env.build("""
+(defrule recomendacion-bajo-peso-femenino
+  (persona (imc ?v) (genero femenino))
+  (test (< ?v 18.5))
+  =>
+  (assert (recomendacion-genero "Como mujer, es importante cuidar también tu salud ósea. Considera evaluación nutricional especializada.")))
+""")
+
+def calcular():
     try:
         peso = float(entry_peso.get())
         estatura = float(entry_estatura.get())
-        if estatura <= 0:
-            raise ValueError("La estatura debe ser mayor a cero.")
+        genero = genero_var.get()
+
+        if peso <= 0 or estatura <= 0:
+            raise ValueError("Peso y estatura deben ser mayores a cero.")
+
         imc = peso / (estatura ** 2)
 
         env.reset()
-        env.assert_string(f"(persona (imc {imc}))")
+        env.assert_string(f'(persona (imc {imc}) (genero {genero}))')
         env.run()
 
         clasificacion = "No clasificado"
+        recomendacion = ""
+        adicional = ""
+
         for fact in env.facts():
             if fact.template.name == "clasificacion":
-                clasificacion = fact.slots[0].replace("-", " ").capitalize()
+                clasificacion = str(fact).split()[-1].replace(")", "").replace("-", " ").capitalize()
+            if fact.template.name == "recomendacion":
+                recomendacion = fact[0].replace('"', '')
+            if fact.template.name == "recomendacion-genero":
+                adicional = fact[0].replace('"', '')
 
-        resultado = f"IMC: {imc:.2f} → Clasificación: {clasificacion}"
+        resultado = f"IMC: {imc:.2f}\nClasificación: {clasificacion}\n\nRecomendación:\n{recomendacion}"
+        if adicional:
+            resultado += f"\n\n{adicional}"
+
         lbl_resultado.config(text=resultado, fg="blue")
 
-    except ValueError as e:
+    except Exception as e:
         lbl_resultado.config(text=f"Error: {str(e)}", fg="red")
 
-# Interfaz de usuario
 ventana = tk.Tk()
-ventana.title("Sistema Experto IMC - CLIPSPY - POLI")
-ventana.geometry("500x400")
+ventana.title("Sistema Experto IMC con Recomendaciones - POLI")
+ventana.geometry("540x500")
 ventana.resizable(False, False)
 
-tk.Label(ventana, text="Sistema Experto: Clasificación del IMC POLI", font=("Helvetica", 14, "bold")).pack(pady=10)
-tk.Label(ventana, text="Ingrese sus datos para conocer su clasificación según el IMC.").pack()
+tk.Label(ventana, text="Sistema Experto: Clasificación del IMC", font=("Helvetica", 14, "bold")).pack(pady=10)
 
-frame_inputs = tk.Frame(ventana)
-frame_inputs.pack(pady=10)
+frame = tk.Frame(ventana)
+frame.pack(pady=10)
 
-tk.Label(frame_inputs, text="Peso (kg):").grid(row=0, column=0, padx=5, pady=5, sticky="e")
-entry_peso = tk.Entry(frame_inputs)
-entry_peso.grid(row=0, column=1, padx=5, pady=5)
+tk.Label(frame, text="Peso (kg):").grid(row=0, column=0, padx=5, pady=5, sticky="e")
+entry_peso = tk.Entry(frame)
+entry_peso.grid(row=0, column=1)
 
-tk.Label(frame_inputs, text="Estatura (m):").grid(row=1, column=0, padx=5, pady=5, sticky="e")
-entry_estatura = tk.Entry(frame_inputs)
-entry_estatura.grid(row=1, column=1, padx=5, pady=5)
+tk.Label(frame, text="Estatura (m):").grid(row=1, column=0, padx=5, pady=5, sticky="e")
+entry_estatura = tk.Entry(frame)
+entry_estatura.grid(row=1, column=1)
 
-tk.Button(ventana, text="Calcular IMC", command=calcular_imc).pack(pady=10)
+tk.Label(frame, text="Género:").grid(row=2, column=0, padx=5, pady=5, sticky="e")
+genero_var = tk.StringVar(value="femenino")
+tk.OptionMenu(frame, genero_var, "femenino", "masculino").grid(row=2, column=1)
 
-lbl_resultado = tk.Label(ventana, text="", font=("Helvetica", 12), fg="blue")
+tk.Button(ventana, text="Calcular IMC", command=calcular).pack(pady=10)
+
+lbl_resultado = tk.Label(ventana, text="", font=("Helvetica", 12), wraplength=500, justify="left")
 lbl_resultado.pack(pady=10)
 
-frame_footer = tk.Frame(ventana)
-frame_footer.pack(side="bottom", pady=15)
-tk.Label(frame_footer, text="Integrantes: Isabel Medina, Laura Murillo, Veronica Velez L", font=("Arial", 9, "italic")).pack()
+tk.Label(ventana, text="Integrantes: Isabel Medina, Laura Murillo, Veronica Velez L", font=("Arial", 9, "italic")).pack(side="bottom", pady=10)
 
 ventana.mainloop()
